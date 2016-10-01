@@ -20,6 +20,7 @@ type Mac2Vendor struct {
 // load the mac to vendor mapping from the provided src file
 func Load(src string) (*Mac2Vendor, error) {
 	if _, err := os.Stat(src); os.IsNotExist(err) {
+		fmt.Println("loading. please be patient...")
 		oui := fmt.Sprintf("/tmp/%s", OUI)
 
 		if err := downloadMacTable(oui); err != nil {
@@ -61,7 +62,7 @@ func (this *Mac2Vendor) Lookup(mac string) (string, error) {
 	if val, ok := this.mapping[normalized]; ok {
 		return val, nil
 	}
-	return "", fmt.Errorf("not found")
+	return "", fmt.Errorf("%s not found", mac)
 }
 
 // download the oui.txt file from ieee
