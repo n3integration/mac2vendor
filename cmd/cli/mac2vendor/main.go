@@ -3,13 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	m2v "github.com/n3integration/mac2vendor"
 	"os"
+
+	m2v "github.com/n3integration/mac2vendor"
 )
 
 func main() {
 	mac := flag.String("mac", "", "the mac address to resolve")
 	quiet := flag.Bool("quiet", false, "quiet mode")
+
 	flag.Parse()
 
 	if *mac == "" {
@@ -18,7 +20,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	mac2vnd, err := m2v.Load(m2v.MAC2VND)
+	mac2vnd, err := m2v.Load(m2v.Dat)
 	if err != nil {
 		fmt.Println("error: ", err)
 		os.Exit(1)

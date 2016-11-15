@@ -4,28 +4,38 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 )
 
-const OUI = "oui.txt"
-const MAC2VND = "mac2vnd.dat"
+const (
+	// Dat is the default mapping file name
+	Dat       = "mac2vnd.dat"
+	delimiter = "\t"
+)
 
+// Mac2Vendor encapsulates the mac address to vendor lookup
 type Mac2Vendor struct {
 	mapping map[string]string
 }
 
-// load the mac to vendor mapping from the provided src file
+func init() {
+	log.SetFlags(log.LstdFlags)
+}
+
+// Load initializes the mac to vendor mapping from the provided src file
 func Load(src string) (*Mac2Vendor, error) {
 	if _, err := os.Stat(src); os.IsNotExist(err) {
-		fmt.Println("loading. please be patient...")
-		oui := fmt.Sprintf("/tmp/%s", OUI)
+		log.Println("loading. please be patient...")
+		oui := "/tmp/oui.txt"
 
 		if err := downloadMacTable(oui); err != nil {
 			return nil, err
 		}
+
 		if err := transform(oui, src); err != nil {
 			return nil, err
 		}
@@ -37,40 +47,29 @@ func Load(src string) (*Mac2Vendor, error) {
 	}
 	defer f.Close()
 
-	mapping := make(map[string]string)
-	reader := bufio.NewReader(f)
-
-	for {
-		line, err := reader.ReadBytes('\n')
-
-		if err == io.EOF {
-			return &Mac2Vendor{mapping}, nil
-		}
-
-		parts := strings.SplitN(string(line), "\t", 2)
-		mapping[parts[0]] = strings.TrimSpace(parts[1])
-	}
+	return initCache(bufio.NewReader(f))
 }
 
-// resolve the mac address vendor
-func (this *Mac2Vendor) Lookup(mac string) (string, error) {
+// Lookup resolves the mac address vendor, if found; otherwise an error is returned
+func (m *Mac2Vendor) Lookup(mac string) (string, error) {
 	normalized := strings.Replace(strings.Replace(mac, ":", "", -1), "-", "", -1)
 	if len(normalized) > 6 {
 		normalized = normalized[:6]
 	}
 
-	if val, ok := this.mapping[normalized]; ok {
+	if val, ok := m.mapping[normalized]; ok {
 		return val, nil
 	}
+
 	return "", fmt.Errorf("%s not found", mac)
 }
 
-// download the oui.txt file from ieee
+// downloadMacTable downloads the oui.txt file from ieee
 func downloadMacTable(dst string) error {
 	src := "http://standards.ieee.org/develop/regauth/oui/oui.txt"
 
 	if _, err := os.Stat(dst); os.IsNotExist(err) {
-		fmt.Println("downloading", src, "to", dst)
+		log.Println("downloading", src, "to", dst)
 
 		output, err := os.Create(dst)
 		if err != nil {
@@ -96,10 +95,10 @@ func downloadMacTable(dst string) error {
 	return nil
 }
 
-// transform the raw contents of src into key=value form in dst
+// transform converts the raw contents of src into key=value form in dst
 func transform(src string, dst string) error {
 	if _, err := os.Stat(dst); os.IsNotExist(err) {
-		fmt.Println("transforming", src, "into", dst)
+		log.Println("transforming", src, "into", dst)
 
 		f, err := os.Open(src)
 		if err != nil {
@@ -124,13 +123,34 @@ func transform(src string, dst string) error {
 
 			if err == io.EOF {
 				return nil
+			} else if err != nil {
+				return err
 			}
 
 			if pattern.Match(line) {
 				parts := pattern.FindStringSubmatch(string(line))
-				writer.WriteString(fmt.Sprintf("%s\t%s\n", parts[1], parts[2]))
+				writer.WriteString(fmt.Sprintf("%s%s%s\n", parts[1], delimiter, parts[2]))
 			}
 		}
+	} else {
+		return err
 	}
-	return nil
+}
+
+// initCache initializes a new Mac2Vendor using the provided Reader
+func initCache(r *bufio.Reader) (*Mac2Vendor, error) {
+	mapping := make(map[string]string)
+
+	for {
+		line, err := r.ReadBytes('\n')
+
+		if err == io.EOF {
+			return &Mac2Vendor{mapping}, nil
+		} else if err != nil {
+			return nil, err
+		}
+
+		parts := strings.SplitN(string(line), delimiter, 2)
+		mapping[parts[0]] = strings.TrimSpace(parts[1])
+	}
 }
