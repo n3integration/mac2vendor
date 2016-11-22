@@ -25,6 +25,8 @@ func main() {
   vnd, err := mac2vnd.Lookup("84:38:35:70:aa:52")
   if err != nil {
     fmt.Println("lookup error:", err)
+  } else if vnd == "" {
+    fmt.Println("not found") 
   } else {
     fmt.Println("found ==>", vnd)
   }
