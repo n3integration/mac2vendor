@@ -2,9 +2,11 @@ package mac2vendor
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -13,8 +15,9 @@ import (
 
 const (
 	// Dat is the default mapping file name
-	Dat       = "mac2vnd.dat"
-	delimiter = "\t"
+	Dat          = "mac2vnd.dat"
+	delimiter    = "\t"
+	prefixLength = 5
 )
 
 // Mac2Vendor encapsulates the mac address to vendor lookup
@@ -50,18 +53,23 @@ func Load(src string) (*Mac2Vendor, error) {
 	return initCache(bufio.NewReader(f))
 }
 
-// Lookup resolves the mac address vendor, if found; otherwise an error is returned
-func (m *Mac2Vendor) Lookup(mac string) (string, error) {
-	normalized := strings.Replace(strings.Replace(mac, ":", "", -1), "-", "", -1)
-	if len(normalized) > 6 {
-		normalized = normalized[:6]
+// Query resolves the vendor matching the provided mac, if found; otherwise, an empty value is returned
+func (m *Mac2Vendor) Query(mac net.HardwareAddr) string {
+	prefix := mac[:3].String()
+	if val, ok := m.mapping[string(prefix)]; ok {
+		return val
 	}
+	return ""
+}
 
-	if val, ok := m.mapping[normalized]; ok {
-		return val, nil
+// Lookup resolves the mac address vendor, if found; otherwise an empty value is returned. An error is
+// returned if the mac cannot be parsed from the provided string
+func (m *Mac2Vendor) Lookup(s string) (string, error) {
+	mac, err := net.ParseMAC(s)
+	if err != nil {
+		return "", err
 	}
-
-	return "", fmt.Errorf("%s not found", mac)
+	return m.Query(mac), nil
 }
 
 // downloadMacTable downloads the oui.txt file from ieee
@@ -129,12 +137,23 @@ func transform(src string, dst string) error {
 
 			if pattern.Match(line) {
 				parts := pattern.FindStringSubmatch(string(line))
-				writer.WriteString(fmt.Sprintf("%s%s%s\n", parts[1], delimiter, parts[2]))
+				writer.WriteString(fmt.Sprintf("%s%s%s\n", delimit(parts[1]), delimiter, parts[2]))
 			}
 		}
 	} else {
 		return err
 	}
+}
+
+func delimit(prefix string) string {
+	var mac bytes.Buffer
+	for i, c := range prefix {
+		mac.WriteRune(c)
+		if i%2 != 0 && i < prefixLength {
+			mac.WriteString(":")
+		}
+	}
+	return mac.String()
 }
 
 // initCache initializes a new Mac2Vendor using the provided Reader
