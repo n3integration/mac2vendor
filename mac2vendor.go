@@ -32,7 +32,7 @@ func init() {
 // Load initializes the mac to vendor mapping from the provided src file
 func Load(src string) (*Mac2Vendor, error) {
 	if _, err := os.Stat(src); os.IsNotExist(err) {
-		log.Println("loading. please be patient...")
+		log.Println("loading mac2vendor data. please be patient...")
 		oui := "/tmp/oui.txt"
 
 		if err := downloadMacTable(oui); err != nil {
@@ -77,7 +77,7 @@ func downloadMacTable(dst string) error {
 	src := "http://standards.ieee.org/develop/regauth/oui/oui.txt"
 
 	if _, err := os.Stat(dst); os.IsNotExist(err) {
-		log.Println("downloading", src, "to", dst)
+		log.Println("saving file to", dst)
 
 		output, err := os.Create(dst)
 		if err != nil {
@@ -137,7 +137,7 @@ func transform(src string, dst string) error {
 
 			if pattern.Match(line) {
 				parts := pattern.FindStringSubmatch(string(line))
-				writer.WriteString(fmt.Sprintf("%s%s%s\n", delimit(parts[1]), delimiter, parts[2]))
+				writer.WriteString(fmt.Sprintf("%s%s%s\n", strings.ToLower(delimit(parts[1])), delimiter, parts[2]))
 			}
 		}
 	} else {
