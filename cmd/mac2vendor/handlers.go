@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/n3integration/mac2vendor"
 )
 
 // Mac2Vnd is a resource model
@@ -39,7 +40,7 @@ func lookup(w http.ResponseWriter, r *http.Request) {
 
 	mac := r.URL.Path[1:]
 
-	vendor, err := mac2vnd.Lookup(mac)
+	vendor, err := mac2vendor.Lookup(mac)
 	response := newMac2Vnd(mac, vendor, err)
 	json, err := json.Marshal(response)
 

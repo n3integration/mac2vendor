@@ -1,5 +1,6 @@
 *.txt
 *.dat
 
+/mac2vendor
 cmd/mac2vendor/mac2vendor
 cmd/cli/mac2vendor/mac2vendor
