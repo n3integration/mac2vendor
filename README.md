@@ -5,7 +5,7 @@ Provides a mac address to vendor lookup
 
 ### CLI
 ```bash
-./cmd/cli/mac2vendor/mac2vendor -quiet -mac 84:38:35:77:aa:52
+./mac2vendor resolve -mac 84:38:35:77:aa:52 [-quiet]
 ```
 
 ### Library
@@ -17,25 +17,30 @@ import "fmt"
 import m2v "github.com/n3integration/mac2vendor"
 
 func main() {
-  mac2vnd, err := m2v.Load(m2v.Dat)
-  if err != nil {
-    fmt.Println("error:", err)
-  }
-
-  vnd, err := mac2vnd.Lookup("84:38:35:70:aa:52")
+  vnd, err := m2v.Lookup("84:38:35:70:aa:52")
   if err != nil {
     fmt.Println("lookup error:", err)
   } else if vnd == "" {
-    fmt.Println("not found") 
+    fmt.Println("not found")
   } else {
     fmt.Println("found ==>", vnd)
   }
 }
 ```
 
+### Web Service
+
+```bash
+./mac2vendor serve [-port 9000]
+```
+
+```curl
+curl -siv 127.0.0.1:9000/84:38:35:70:aa:52
+```
+
 ## License
 
-Copyright 2016 n3integration@gmail.com
+Copyright 2019 n3integration@gmail.com
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

@@ -1,24 +1,22 @@
 package main
 
 import (
-	"net/http"
+	"log"
 	"os"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/n3integration/mac2vendor/actions"
+	"gopkg.in/urfave/cli.v1"
 )
 
-func init() {
-	customFormatter := new(log.TextFormatter)
-	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
-	customFormatter.FullTimestamp = true
-
-	log.SetOutput(os.Stderr)
-	log.SetLevel(log.InfoLevel)
-	log.SetFormatter(customFormatter)
-}
+var Version = "snapshot"
 
 func main() {
-	http.HandleFunc("/", logger(lookup))
-	log.Info("fired up service...")
-	http.ListenAndServe(":9000", nil)
+	app := cli.NewApp()
+	app.Name = "mac2vnd"
+	app.Version = Version
+	app.Usage = "mac address to vendor resolution utilities"
+	app.Commands = actions.GetCommands()
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
 }

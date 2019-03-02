@@ -1,10 +1,9 @@
-package main
+package actions
 
 import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/pkg/errors"
 	"go/format"
 	"io"
 	"io/ioutil"
@@ -14,24 +13,41 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+
+	"github.com/pkg/errors"
+	"gopkg.in/urfave/cli.v1"
 )
 
 const (
-	// Dat is the default mapping file name
-	Dat          = "mac2vnd.dat"
+	datFile      = "mac2vnd.dat"
 	delimiter    = "\t"
 	prefixLength = 5
 )
 
+var (
+	source  = "http://standards-oui.ieee.org/oui/oui.txt"
+	tplPath = "templates/mac2vnd.tpl"
+)
+
 func init() {
-	log.SetFlags(log.LstdFlags)
+	register(cli.Command{
+		Name:    "update",
+		Action:  updateAction,
+		Aliases: []string{"up"},
+		Usage:   "update the mac address vendor mapping to the latest oui listing",
+	})
+}
+
+func updateAction(_ *cli.Context) error {
+	return load(datFile)
 }
 
 // Load initializes the mac to vendor mapping from the provided src file
 func load(src string) error {
+	oui := "oui.txt"
 	if _, err := os.Stat(src); os.IsNotExist(err) {
-		log.Println("loading mac2vendor data. please be patient...")
-		oui := "/tmp/oui.txt"
+		log.Println("loading mac2vendor data...")
+		defer os.Remove(oui)
 
 		if err := downloadMacTable(oui); err != nil {
 			return err
@@ -47,16 +63,18 @@ func load(src string) error {
 
 // downloadMacTable downloads the oui.txt file from ieee
 func downloadMacTable(dst string) error {
-	src := "http://standards-oui.ieee.org/oui/oui.txt"
-
 	if _, err := os.Stat(dst); os.IsNotExist(err) {
 		log.Println("saving file to", dst)
 
-		response, err := http.Get(src)
+		response, err := http.Get(source)
 		if err != nil {
-			return errors.Wrap(err, "failed to download "+src)
+			return errors.Wrap(err, "failed to download "+source)
 		}
+
 		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			return errors.New("failed to download " + source + "; server responded with " + response.Status)
+		}
 
 		output, err := os.Create(dst)
 		if err != nil {
@@ -68,7 +86,7 @@ func downloadMacTable(dst string) error {
 		defer writer.Flush()
 
 		if _, err = io.Copy(writer, response.Body); err != nil {
-			return errors.Wrap(err, "failed to write "+src)
+			return errors.Wrap(err, "failed to write "+source)
 		}
 	}
 	return nil
@@ -92,13 +110,14 @@ func transform(src string, dst string) error {
 		}
 		defer output.Close()
 
-		pattern := regexp.MustCompile(`\s*([0-9a-zA-Z]+)[\s]*\(base 16\)[\s]*([^\r]+)`)
+		pattern := regexp.MustCompile(`\s*([0-9a-zA-Z]+)[\s]*\(base 16\)[\s]*([^\r\n]+)`)
 		reader := bufio.NewReader(f)
 
 		writer := bufio.NewWriter(output)
 		defer writer.Flush()
 
 		mapping := make(map[string]string)
+		defer os.Remove(dst)
 
 		for {
 			line, err := reader.ReadBytes('\n')
@@ -111,37 +130,44 @@ func transform(src string, dst string) error {
 
 			if pattern.Match(line) {
 				parts := pattern.FindStringSubmatch(string(line))
-				mapping[delimit(strings.ToLower(parts[1]))] = parts[2]
-				writer.WriteString(fmt.Sprintf("%s%s%s\n", strings.ToLower(delimit(parts[1])), delimiter, parts[2]))
+				prefix := delimit(strings.ToLower(parts[1]))
+				mapping[prefix] = parts[2]
+				writer.WriteString(fmt.Sprintf("%s%s%s\n", prefix, delimiter, parts[2]))
 			}
 		}
 
-		defer os.Remove(dst)
-		goTemplate, err := ioutil.ReadFile("templates/mac2vnd.tpl")
-		if err != nil {
-			return errors.Wrap(err, "failed to read template file")
+		if err := generateMapping(mapping); err != nil {
+			return err
 		}
-		log.Println("Parsing template...")
-		t, err := template.New("t").Parse(string(goTemplate))
-		if err != nil {
-			return errors.Wrap(err, "failed to parse template")
-		}
-
-		log.Println("Executing template...")
-		buffer := new(bytes.Buffer)
-		err = t.Execute(buffer, mapping)
-		if err != nil {
-			return errors.Wrap(err, "failed to execute template")
-		}
-
-		formatted, err := format.Source(buffer.Bytes())
-		if err != nil {
-			return errors.Wrap(err, "failed to format source")
-		}
-
-		ioutil.WriteFile("mapping.go", formatted, 0755)
 	}
 	return nil
+}
+
+func generateMapping(mapping map[string]string) error {
+	goTemplate, err := ioutil.ReadFile(tplPath)
+	if err != nil {
+		return errors.Wrap(err, "failed to read template file")
+	}
+
+	log.Println("parsing template...")
+	t, err := template.New("t").Parse(string(goTemplate))
+	if err != nil {
+		return errors.Wrap(err, "failed to parse template")
+	}
+
+	log.Println("executing template...")
+	buffer := new(bytes.Buffer)
+	err = t.Execute(buffer, mapping)
+	if err != nil {
+		return errors.Wrap(err, "failed to execute template")
+	}
+
+	formatted, err := format.Source(buffer.Bytes())
+	if err != nil {
+		return errors.Wrap(err, "failed to format source")
+	}
+
+	return ioutil.WriteFile("mapping.go", formatted, 0755)
 }
 
 func delimit(prefix string) string {

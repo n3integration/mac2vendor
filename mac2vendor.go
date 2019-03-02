@@ -7,10 +7,14 @@ import (
 )
 
 var (
-	ErrCannotResolveType = errors.New("cannot resolve type to mac address")
-
-	mapping = make(map[string]string)
+	errCannotResolveType = errors.New("cannot resolve type to mac address")
+	mapping              = make(map[string]string)
 )
+
+// IsLoaded is a predicate to determine whether or not the mapping table was loaded
+func IsLoaded() bool {
+	return len(mapping) > 0
+}
 
 // Lookup resolves the provided MAC address to the registered vendor
 func Lookup(v interface{}) (string, error) {
@@ -25,7 +29,7 @@ func Lookup(v interface{}) (string, error) {
 	case net.HardwareAddr:
 		mac = v.(net.HardwareAddr)
 	default:
-		return "", ErrCannotResolveType
+		return "", errCannotResolveType
 	}
 
 	prefix := mac[:3].String()
